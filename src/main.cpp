@@ -6,7 +6,7 @@
 #include <WiFiClient.h>
 #include <SPI.h>
 #include <GxEPD.h>
-#include <GxGDEW075T8/GxGDEW075T8.cpp>
+#include <GxGDEW027C44/GxGDEW027C44.cpp>
 #include <GxIO/GxIO_SPI/GxIO_SPI.cpp>
 #include <GxIO/GxIO.cpp>
 // FONT used for title / message body
@@ -15,13 +15,13 @@
 
 //Converting fonts with ümlauts: ./fontconvert *.ttf 18 32 252
 // Point this to the Webpage rendering your calendar
-String calendarUrl = "http://calendar.fasani.de/martin";
+String calendarUrl = "http://calendar.fasani.de/carlos";
 // Point this to the screenshot endpoint (Should be placed on screenshot/index.php)
 String screenshotHost = "calendar.fasani.de";
 String screenshotPath = "/screenshot/";
 // IMPORTANT: The url to the screenshot should respond with a BMP image
 // Take care with the route since should not return a redirect or any other response than what expected
-bool debugMode = false;
+bool debugMode = true;
 // mDNS: display.local
 const char* domainName = "calendar"; 
 String message;
@@ -31,16 +31,16 @@ String javascriptFadeMessage = "<script>setTimeout(function(){document.getElemen
 // TCP server at port 80 will respond to HTTP requests
 ESP8266WebServer server(80);
 
-//CLK  = D8; D
-//DIN  = D7; D
-//BUSY = D6; D
-//CS   = D0; D
-//RST  = D4;
+
+//BUSY = D6;
+
+//CS   = D8;
 //DC   = D3;
-// GxIO_SPI(SPIClass& spi, int8_t cs, int8_t dc, int8_t rst = -1, int8_t bl = -1);
-GxIO_Class io(SPI, D0, D3, D4);
+//RST  = D4;
+// GxIO_SPI(SPIClass& spi, int8_t cs, int8_t dc, int8_t rst = -1, int8_t bl = -1)
+GxIO_Class io(SPI, D8, D3, D4); 
 // GxGDEP015OC1(GxIO& io, uint8_t rst = D4, uint8_t busy = D2);
-GxEPD_Class display(io, D4, D6 );
+GxEPD_Class display(io, D4, D6); 
 
 //unsigned long  startMillis = millis();
 const unsigned long  serverDownTime = millis() + 60 * 60 * 1000; // Min / Sec / Millis Delay between updates, in milliseconds, WU allows 500 requests per-day maximum, set to every 10-mins or 144/day
@@ -126,12 +126,14 @@ void handleDeepSleep() {
 
 
 void handleDisplayClean() {
+  Serial.println("handleDisplayClean");
   display.fillScreen(GxEPD_WHITE);
   display.update();
   server.send(200, "text/html", "Clearing display");
 }
 
 void handleDisplayWrite() {
+  Serial.println("handleDisplayWrite");
   display.fillScreen(GxEPD_WHITE);
 
   // Analizo el POST iterando cada value
@@ -199,7 +201,7 @@ void handleWebToDisplay() {
       return;
     }
   
-  String image = screenshotPath+"?u=" + url + "&z=" + zoom + "&b=" + brightness;
+  String image = screenshotPath+"?u=" + url + "&z=" + zoom + "&b=" + brightness +"&eink=GxGDEW027C44";
   String request;
   request  = "GET " + image + " HTTP/1.1\r\n";
   request += "Host: " + screenshotHost + "\r\n";
@@ -363,14 +365,14 @@ void loop() {
 
 void setup() {
   Serial.begin(115200);
-
+  delay(100);
   display.init();
-  display.setRotation(2); // Rotates display N times clockwise
+  display.setRotation(3); // Rotates display N times clockwise
   display.setFont(&FreeMonoBold12pt7b);
   display.setTextColor(GxEPD_BLACK);
   uint8_t connectTries = 0;
   WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED && connectTries<10) {
+  while (WiFi.status() != WL_CONNECTED && connectTries<20) {
     Serial.print(" .");
     delay(500);
     connectTries++;
@@ -396,9 +398,14 @@ Serial.println(WiFi.localIP());
   server.on("/display-clean", handleDisplayClean);
   server.on("/deep-sleep", handleDeepSleep);
   server.begin();
-  if (WiFi.status() == WL_CONNECTED) {
-    handleWebToDisplay();
-  } else {
-    displayMessage("Please check your credentials in Config.h\nCould not connect to "+String(WIFI_SSID),80);
-  }
+
+  handleWebToDisplay();
+ /* if (WiFi.status() == WL_CONNECTED) {
+     
+     displayMessage("Estoy online", 40);
+   } else {
+     Serial.println(WiFi.status());
+     displayMessage("Please check your credentials in Config.h\nCould not connect to "+String(WIFI_SSID),80);
+  } 
+  */
 }
