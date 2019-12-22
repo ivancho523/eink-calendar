@@ -1,2 +1,6 @@
 #define WIFI_SSID "Your WiFi Name"
 #define WIFI_PASS ""
+
+#define DEEPSLEEP_ENABLED
+
+#define SLEEP_AFTER_SECONDS 240

@@ -6,7 +6,7 @@
 #include <WiFiClient.h>
 #include <SPI.h>
 #include <GxEPD.h>
-#include <GxGDEW027C44/GxGDEW027C44.cpp>
+#include <GxGDEW027W3/GxGDEW027W3.cpp> // GxGDEW027W3 ->b/w  GxGDEW027C44 -> Color
 #include <GxIO/GxIO_SPI/GxIO_SPI.cpp>
 #include <GxIO/GxIO.cpp>
 // FONT used for title / message body
@@ -19,9 +19,10 @@ String calendarUrl = "http://calendar.fasani.de/carlos";
 // Point this to the screenshot endpoint (Should be placed on screenshot/index.php)
 String screenshotHost = "calendar.fasani.de";
 String screenshotPath = "/screenshot/";
+unsigned int secondsToDeepsleep = 120;
 // IMPORTANT: The url to the screenshot should respond with a BMP image
 // Take care with the route since should not return a redirect or any other response than what expected
-bool debugMode = true;
+bool debugMode = false;
 // mDNS: display.local
 const char* domainName = "calendar"; 
 String message;
@@ -356,11 +357,17 @@ void loop() {
   // Add  milisec comparison to make server work for 1 min / 90 sec
   if (millis() < serverDownTime) {
     server.handleClient();
-  } else {
-    Serial.println(" Server going down");
-    display.powerDown();
-    ESP.deepSleep(0);
-  }
+  } 
+  // Note: Enable deepsleep only as last step when all the rest is working as you expect
+  #ifdef DEEPSLEEP_ENABLED
+    if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
+        Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
+        ESP.deepSleep(120e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
+    }
+    secondsToDeepsleep++;
+    delay(1000);
+  #endif
+
 }
 
 void setup() {
@@ -370,6 +377,8 @@ void setup() {
   display.setRotation(3); // Rotates display N times clockwise
   display.setFont(&FreeMonoBold12pt7b);
   display.setTextColor(GxEPD_BLACK);
+
+  Serial.printf("Display w: %d h: %d", display.width(), display.height());
   uint8_t connectTries = 0;
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED && connectTries<20) {
