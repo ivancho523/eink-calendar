@@ -32,9 +32,7 @@ String javascriptFadeMessage = "<script>setTimeout(function(){document.getElemen
 // TCP server at port 80 will respond to HTTP requests
 ESP8266WebServer server(80);
 
-
 //BUSY = D6;
-
 //CS   = D8;
 //DC   = D3;
 //RST  = D4;
@@ -42,9 +40,6 @@ ESP8266WebServer server(80);
 GxIO_Class io(SPI, D8, D3, D4); 
 // GxGDEP015OC1(GxIO& io, uint8_t rst = D4, uint8_t busy = D2);
 GxEPD_Class display(io, D4, D6); 
-
-//unsigned long  startMillis = millis();
-const unsigned long  serverDownTime = millis() + 60 * 60 * 1000; // Min / Sec / Millis Delay between updates, in milliseconds, WU allows 500 requests per-day maximum, set to every 10-mins or 144/day
 
 WiFiClient client; // wifi client object
 
@@ -127,6 +122,7 @@ void handleDeepSleep() {
 
 
 void handleDisplayClean() {
+  digitalWrite(D5, HIGH);
   Serial.println("handleDisplayClean");
   display.fillScreen(GxEPD_WHITE);
   display.update();
@@ -134,6 +130,7 @@ void handleDisplayClean() {
 }
 
 void handleDisplayWrite() {
+  digitalWrite(D5, HIGH);
   Serial.println("handleDisplayWrite");
   display.fillScreen(GxEPD_WHITE);
 
@@ -180,6 +177,8 @@ uint32_t read32()
 
 
 void handleWebToDisplay() {
+  digitalWrite(D5, HIGH);
+  int millisIni = millis();
   String url = calendarUrl;
   String zoom = ".8";
   String brightness = "100";
@@ -334,10 +333,13 @@ while (client.available()) {
           }
         } // end pixel
       } // end line
-
+      int millisDownload = millis();
        server.send(200, "text/html", "<div id='m'>Image sent to display</div>"+javascriptFadeMessage);
        Serial.println("Bytes read:"+ String(bytesRead));
+      
        display.update();
+
+       Serial.printf("BENCHMARKS\nDownload: %d display.update: %d\n", millisDownload-millisIni, millis()-millisDownload);
        client.stop();
        break;
        
@@ -354,13 +356,12 @@ while (client.available()) {
 }
 
 void loop() {
-  // Add  milisec comparison to make server work for 1 min / 90 sec
-  if (millis() < serverDownTime) {
-    server.handleClient();
-  } 
+  server.handleClient();
+  
   // Note: Enable deepsleep only as last step when all the rest is working as you expect
   #ifdef DEEPSLEEP_ENABLED
     if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
+        digitalWrite(D5, LOW);
         Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
         ESP.deepSleep(120e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
     }
@@ -373,6 +374,8 @@ void loop() {
 void setup() {
   Serial.begin(115200);
   delay(100);
+  pinMode(D5, OUTPUT);
+
   display.init();
   display.setRotation(3); // Rotates display N times clockwise
   display.setFont(&FreeMonoBold12pt7b);
