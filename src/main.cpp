@@ -409,10 +409,9 @@ void handle_http_root() {
   html += "<textarea placeholder='Content' name='text' rows=4 class='form-control'></textarea>";
   html += "<input type='submit' value='Send to display' class='btn btn-success'></form>";
   html += "<a class='btn btn-secondary' role='button' target='frame' href='/display-clean'>Clean screen</a> ";
-  html += "<a class='btn btn-danger' role='button' target='frame' href='/delete-wifi-credentials'>Reset WiFi credentials</a> ";
-  html += "<a class='btn btn-default' role='button' target='frame' href='/deep-sleep'>Deep sleep mode</a><br>";
-  html += "<iframe name='frame'></iframe>";
-  html += "<a href='/deep-sleep' target='frame'>Deep sleep</a><br>";
+  html += "<a class='btn btn-danger' role='button' target='frame' href='/delete-wifi-credentials'>Reset WiFi credentials</a><br>";
+  html += "<iframe name='frame' width='100%'></iframe>";
+  html += "<a href='/deep-sleep' target='frame'>Deep sleep power saving mode</a><br>";
   html += "</div></div></div></main>";
   html += "</body>";
 
@@ -678,7 +677,7 @@ void setup() {
 			hasCredentials = true;
 		}
 	}  else {
-		Serial.println("Could not find preferences, need send data over BLE");
+		Serial.println("Could not find preferences. Please send the WiFi config over Bluetooth with udpx Android application");
     // Start Bluetooth serial. This reduces Heap memory like crazy so start it only if preferences are not set!
     initBTSerial();
     Serial.printf("initBTSerial() freeHeap: %d\n", ESP.getFreeHeap());
