@@ -80,10 +80,9 @@ uint8_t lostConnectionCount = 1;
 String ssidPrim;
 String pwPrim;
 
-
 void deleteWifiCredentials() {
 	Serial.println("Clearing saved WiFi credentials");
-  server.send(200, "text/html", "Clearing saved WiFi credentials, after reset will need Bluetooth configuration");
+  server.send(200, "text/html", "Clearing saved WiFi credentials<br>After reset will wait for Bluetooth configuration");
 	preferences.begin("WiFiCred", false);
 	preferences.clear();
 	preferences.end();
@@ -409,8 +408,8 @@ void handle_http_root() {
   html += "<label for='title'>Title:</label><input id='title' name='title' class='form-control'><br>";
   html += "<textarea placeholder='Content' name='text' rows=4 class='form-control'></textarea>";
   html += "<input type='submit' value='Send to display' class='btn btn-success'></form>";
-  html += "<a class='btn btn-default' role='button' target='frame' href='/display-clean'>Clean screen</a> | ";
-  html += "<a class='btn btn-danger' role='button' target='frame' href='/delete-wifi-credentials'>Reset WiFi credentials</a> | ";
+  html += "<a class='btn btn-secondary' role='button' target='frame' href='/display-clean'>Clean screen</a> ";
+  html += "<a class='btn btn-danger' role='button' target='frame' href='/delete-wifi-credentials'>Reset WiFi credentials</a> ";
   html += "<a class='btn btn-default' role='button' target='frame' href='/deep-sleep'>Deep sleep mode</a><br>";
   html += "<iframe name='frame'></iframe>";
   html += "<a href='/deep-sleep' target='frame'>Deep sleep</a><br>";
@@ -513,23 +512,6 @@ void connectWiFi() {
   WiFi.begin(ssidPrim.c_str(), pwPrim.c_str());
 }
 
-void loop() {
-
- server.handleClient();
-
-  // Note: Enable deepsleep only as last step when all the rest is working as you expect
-#ifdef DEEPSLEEP_ENABLED
-  if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
-      Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
-      display.powerDown();
-      delay(100);
-      ESP.deepSleep(DEEPSLEEP_SECONDS*1000000ULL); // Expects microseconds
-  }
-  secondsToDeepsleep++;
-  delay(1000);
-#endif
-
-}
 #ifdef ESP32
 /**
  * Create unique device name from MAC address
@@ -614,9 +596,9 @@ void readBTSerial() {
 			Serial.println("primary SSID: "+ssidPrim+" password: "+pwPrim);
 			connStatusChanged = true;
 			hasCredentials = true;
-			delay(100);
-			connectWiFi();
-			
+			delay(500);
+			Serial.println("Restarting so it starts again with the preferences saved");
+			ESP.restart();
 		}
 		else if (jsonBuffer.containsKey("erase"))
 		{ // {"erase":"true"}
@@ -646,6 +628,27 @@ void readBTSerial() {
 	jsonBuffer.clear();
 }
 #endif
+void loop() {
+
+ server.handleClient();
+
+  // Note: Enable deepsleep only as last step when all the rest is working as you expect
+#ifdef DEEPSLEEP_ENABLED
+  if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
+      Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
+      display.powerDown();
+      delay(100);
+      ESP.deepSleep(DEEPSLEEP_SECONDS*1000000ULL); // Expects microseconds
+  }
+  secondsToDeepsleep++;
+  delay(1000);
+#endif
+  #ifdef WIFI_BLE
+  if (!WiFi.isConnected()) {
+    readBTSerial();
+  }
+  #endif
+}
 
 void setup() {
   Serial.begin(115200);delay(10);
