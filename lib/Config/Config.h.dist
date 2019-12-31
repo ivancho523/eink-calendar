@@ -1,4 +1,8 @@
 #include <WString.h>
+
+// To enable Bluetooth configuration uncomment this
+#define WIFI_BLE
+
 const char* WIFI_SSID = "Your WiFi Name";
 const char* WIFI_PASS = "";
 

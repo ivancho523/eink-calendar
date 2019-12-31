@@ -11,13 +11,31 @@
 #include <WiFiClient.h>
 
 #ifdef ESP32
-  #include <WiFi.h>
   #include <ESPmDNS.h>
   #include <WebServer.h>
-#elif ESP8266
+    // Bluetooth configuration:
+  #include <ArduinoJson.h>
+  #include <Preferences.h>
+  #include <nvs.h>
+  #include <nvs_flash.h>
+  #include <WiFi.h>
+  Preferences preferences; 
+  // TCP server at port 80 will respond to HTTP requests
+  WebServer server(80);
+  #elif ESP8266
+
   #include <ESP8266WiFi.h>
   #include <ESP8266mDNS.h>
   #include <ESP8266WebServer.h>
+  ESP8266WebServer server(80);
+    
+#endif
+
+#ifdef WIFI_BLE
+  #include "BluetoothSerial.h"
+  // SerialBT class
+  BluetoothSerial SerialBT;
+  StaticJsonDocument<400> jsonBuffer;
 #endif
 
 // FONT used for title / message body
@@ -34,12 +52,7 @@ String message;
 // Makes a div id="m" containing response message to dissapear after 3 seconds
 String javascriptFadeMessage = "<script>setTimeout(function(){document.getElementById('m').innerHTML='';},3000);</script>";
 
-// TCP server at port 80 will respond to HTTP requests
-#ifdef ESP32
-  WebServer server(80);
-  #elif ESP8266
-  ESP8266WebServer server(80);
-#endif
+
 
 #define COMPRESSION_BUFFER 3000
 #define DECOMPRESSION_BUFFER 16000
@@ -58,122 +71,26 @@ GxIO_Class io(SPI, 5, 17, 16);
 GxEPD_Class display(io, 16, 4);
 
 WiFiClient client; // wifi client object
-
-// Displays message doing a partial update
-void displayMessage(String message, int height) {
-  Serial.println("DISPLAY prints: "+message);
-  display.setTextColor(GxEPD_WHITE);
-  display.fillRect(0,0,display.width(),height,GxEPD_BLACK);
-  display.setCursor(2, 25);
-  display.print(message);
-  display.updateWindow(0,0,display.width(),height, true); // Attempt partial update
-  display.update(); // -> Since could not make partial updateWindow work
-}
-
-void handle_http_not_found() {
-  server.send(404, "text/plain", "Not Found");
-}
-
-void handle_http_root() {
-
-  String headers = "<head><link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css\">";
-  headers += "<meta name='viewport' content='width=device-width,initial-scale=1'></head>";
-  String html = "<body><main role='main'><div class='container-fluid'><div class='row'>";
-  html += "<div class='col-md-12'><h4>" + String(domainName) + ".local</h4>";
-  html += "<form id='f' action='/web-image' target='frame' method='POST'>";
-  html += "<div class='row'><div class='col-sm-12'>";
-
-  html += "<select name='zoom' style='width:7em' class='form-control float-right'>";
-  html += "<option value='2'>2</option>";
-  html += "<option value='1.7'>1.7</option>";
-  html += "<option value='1.5'>1.5</option>";
-  html += "<option value='1.4'>1.4</option>";
-  html += "<option value='1.3'>1.3</option>";
-  html += "<option value='1.2'>1.2</option>";
-  html += "<option value='1.1'>1.1 10% zoomed</option>";
-  html += "<option value='' selected>Zoom</option>";
-  html += "<option value='1'>1 no zoom</option>";
-  html += "<option value='.9'>.9 10% smaller</option>";
-  html += "<option value='.85'>.85</option>";
-  html += "<option value='.8'>.8</option>";
-  html += "<option value='.7'>.7</option>";
-  html += "<option value='.6'>.6</option>";
-  html += "<option value='.5'>.5 half size</option></select>&nbsp;";
-  
-  html += "<select name='brightness' style='width:8em' class='form-control float-right'>";
-  html += "<option value='150'>+5</option>";
-  html += "<option value='140'>+4</option>";
-  html += "<option value='130'>+3</option>";
-  html += "<option value='120'>+2</option>";
-  html += "<option value='110'>+1</option>";
-  html += "<option value='' selected>Brightness</option>";
-  html += "<option value='90'>-1</option>";
-  html += "</select>";
-
-  html += "</div></div>";
-  html += "<input placeholder='http://' id='url' name='url' type='url' class='form-control' value='"+calendarUrl+"'>";
-  html += "<div class='row'><div class='col-sm-12 form-group'>";
-  html += "<input type='submit' value='Website screenshot' class='btn btn-mini btn-dark'>&nbsp;";
-  html += "<input type='button' onclick='document.getElementById(\"url\").value=\"\"' value='Clean url' class='btn btn-mini btn-default'></div>";
-  html += "</div></form>";
-  
-  html += "<form id='f2' action='/display-write' target='frame' method='POST'>";
-  html += "<label for='title'>Title:</label><input id='title' name='title' class='form-control'><br>";
-  html += "<textarea placeholder='Content' name='text' rows=4 class='form-control'></textarea>";
-  html += "<input type='submit' value='Send to display' class='btn btn-success'></form>";
-  html += "<a class='btn btn-default' role='button' target='frame' href='/display-clean'>Clean screen</a><br>";
-  html += "<iframe name='frame'></iframe>";
-  html += "<a href='/deep-sleep' target='frame'>Deep sleep</a><br>";
-  html += "</div></div></div></main>";
-  html += "</body>";
-
-  server.send(200, "text/html", headers + html);
-}
-
-void handleDeepSleep() {
-  server.send(200, "text/html", "Going to deep-sleep. Reset to wake up");
-  delay(1);
-  ESP.deepSleep(20e6);
-}
+// DEBUG_MODE is compiled now and cannot be changed on runtime (Check lib/Config)
+char apName[] = "CALE-xxxxxxxxxxxx";
+bool usePrimAP = true;
+/** Flag if stored AP credentials are available */
+bool hasCredentials = false;
+/** Connection status */
+volatile bool isConnected = false;
+bool connStatusChanged = false;
+uint8_t lostConnectionCount = 1;
+/** SSIDs/Password of local WiFi networks */
+String ssidPrim;
+String pwPrim;
 
 
-void handleDisplayClean() {
-  display.fillScreen(GxEPD_WHITE);
-  display.update();
-  server.send(200, "text/html", "Clearing display");
-}
-
-void handleDisplayWrite() {
-  display.fillScreen(GxEPD_WHITE);
-
-  // Analizo el POST iterando cada value
-  if (server.args() > 0) {
-    for (byte i = 0; i < server.args(); i++) {
-
-      if (server.argName(i) == "title") {
-        display.setFont(&FreeMonoBold24pt7b);
-        display.setCursor(10, 43);
-        display.print(server.arg(i));
-      }
-      if (server.argName(i) == "text") {
-        display.setFont(&FreeMonoBold12pt7b);
-        display.setCursor(10, 75);
-        display.print(server.arg(i));
-      }
-    }
-  }
-  display.update();
-  server.send(200, "text/html", "Text sent to display");
-}
-
-uint16_t read16()
-{
-  // BMP data is stored little-endian, same as Arduino.
-  uint16_t result;
-  ((uint8_t *)&result)[0] = client.read(); // LSB
-  ((uint8_t *)&result)[1] = client.read(); // MSB
-  //Serial.print(result, HEX);
-  return result;
+void deleteWifiCredentials() {
+	Serial.println("Clearing saved WiFi credentials");
+	preferences.begin("WiFiCred", false);
+	preferences.clear();
+	preferences.end();
+	delay(500);
 }
 
 uint32_t readBuffer16(uint8_t * outBuffer, long *bytePointer)
@@ -186,16 +103,6 @@ uint32_t readBuffer16(uint8_t * outBuffer, long *bytePointer)
   return result;
 }
 
-uint32_t read32()
-{
-  // BMP data is stored little-endian, same as Arduino.
-  uint32_t result;
-  ((uint8_t *)&result)[0] = client.read(); // LSB
-  ((uint8_t *)&result)[1] = client.read();
-  ((uint8_t *)&result)[2] = client.read();
-  ((uint8_t *)&result)[3] = client.read(); // MSB
-  return result;
-}
 
 uint32_t readBuffer32(uint8_t * outBuffer, long *bytePointer)
 {
@@ -314,7 +221,7 @@ bool bmpBufferRead(uint8_t * outBuffer, long byteCount) {
       display.update();
       return false;
     }
-} 
+}
 
 void handleWebToDisplay() {
   int milliIni = millis();
@@ -354,7 +261,6 @@ void handleWebToDisplay() {
   client.flush();
   display.fillScreen(GxEPD_WHITE);
   
-  uint32_t startTime = millis();
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 5000) {
@@ -411,7 +317,8 @@ Serial.print(inBuffer[0], HEX);Serial.println(" ");
     delete(inBuffer);
     
     // Render BMP with outBuffer if this works
-    Serial.printf("uncompress_status: %d Compressed length: %lu\n", cmp_status, byteCount);
+    Serial.printf("uncompress_status: %d Compressed length: %lu freeHeap: %d\n", 
+                  cmp_status, byteCount, ESP.getFreeHeap());
     bool isRendered = 0;
     if (cmp_status == 0) {
       isRendered = bmpBufferRead(outBuffer,uncomp_len);
@@ -421,6 +328,181 @@ Serial.print(inBuffer[0], HEX);Serial.println(" ");
     Serial.printf("Eink isRendered: %d BENCHMARKS:\n", isRendered);
     Serial.printf("Download: %d ms Decompress: %d ms Rendering: %lu seconds\n", milliDecomp-milliIni, millisAfterDecomp-milliDecomp, (millis()-millisAfterDecomp)/1000 );
     delete(outBuffer);
+}
+
+/** Callback for connection loss */
+void lostCon(system_event_id_t event) {
+	isConnected = false;
+	connStatusChanged = true;
+
+    Serial.printf("WiFi lost connection try %d to connect again\n", lostConnectionCount);
+	// Avoid trying to connect forever if the user made a typo in password
+	if (lostConnectionCount>4) {
+		deleteWifiCredentials();
+		ESP.restart();
+	} else if (lostConnectionCount>1) {
+		Serial.printf("Lost connection %d times", lostConnectionCount);
+	}
+	lostConnectionCount++;
+	#ifdef WIFI_BLE
+	  WiFi.begin(ssidPrim.c_str(), pwPrim.c_str());
+	#else
+      WiFi.begin(WIFI_SSID, WIFI_PASS);
+	#endif
+}
+
+// Displays message doing a partial update
+void displayMessage(String message, int height) {
+  Serial.println("DISPLAY prints: "+message);
+  display.setTextColor(GxEPD_WHITE);
+  display.fillRect(0,0,display.width(),height,GxEPD_BLACK);
+  display.setCursor(2, 25);
+  display.print(message);
+  display.updateWindow(0,0,display.width(),height, true); // Attempt partial update
+  display.update(); // -> Since could not make partial updateWindow work
+}
+
+void handle_http_not_found() {
+  server.send(404, "text/plain", "Not Found");
+}
+
+void handle_http_root() {
+
+  String headers = "<head><link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css\">";
+  headers += "<meta name='viewport' content='width=device-width,initial-scale=1'></head>";
+  String html = "<body><main role='main'><div class='container-fluid'><div class='row'>";
+  html += "<div class='col-md-12'><h4>" + String(domainName) + ".local</h4>";
+  html += "<form id='f' action='/web-image' target='frame' method='POST'>";
+  html += "<div class='row'><div class='col-sm-12'>";
+
+  html += "<select name='zoom' style='width:7em' class='form-control float-right'>";
+  html += "<option value='2'>2</option>";
+  html += "<option value='1.7'>1.7</option>";
+  html += "<option value='1.5'>1.5</option>";
+  html += "<option value='1.4'>1.4</option>";
+  html += "<option value='1.3'>1.3</option>";
+  html += "<option value='1.2'>1.2</option>";
+  html += "<option value='1.1'>1.1 10% zoomed</option>";
+  html += "<option value='' selected>Zoom</option>";
+  html += "<option value='1'>1 no zoom</option>";
+  html += "<option value='.9'>.9 10% smaller</option>";
+  html += "<option value='.85'>.85</option>";
+  html += "<option value='.8'>.8</option>";
+  html += "<option value='.7'>.7</option>";
+  html += "<option value='.6'>.6</option>";
+  html += "<option value='.5'>.5 half size</option></select>&nbsp;";
+  
+  html += "<select name='brightness' style='width:8em' class='form-control float-right'>";
+  html += "<option value='150'>+5</option>";
+  html += "<option value='140'>+4</option>";
+  html += "<option value='130'>+3</option>";
+  html += "<option value='120'>+2</option>";
+  html += "<option value='110'>+1</option>";
+  html += "<option value='' selected>Brightness</option>";
+  html += "<option value='90'>-1</option>";
+  html += "</select>";
+
+  html += "</div></div>";
+  html += "<input placeholder='http://' id='url' name='url' type='url' class='form-control' value='"+calendarUrl+"'>";
+  html += "<div class='row'><div class='col-sm-12 form-group'>";
+  html += "<input type='submit' value='Website screenshot' class='btn btn-mini btn-dark'>&nbsp;";
+  html += "<input type='button' onclick='document.getElementById(\"url\").value=\"\"' value='Clean url' class='btn btn-mini btn-default'></div>";
+  html += "</div></form>";
+  
+  html += "<form id='f2' action='/display-write' target='frame' method='POST'>";
+  html += "<label for='title'>Title:</label><input id='title' name='title' class='form-control'><br>";
+  html += "<textarea placeholder='Content' name='text' rows=4 class='form-control'></textarea>";
+  html += "<input type='submit' value='Send to display' class='btn btn-success'></form>";
+  html += "<a class='btn btn-default' role='button' target='frame' href='/display-clean'>Clean screen</a><br>";
+  html += "<iframe name='frame'></iframe>";
+  html += "<a href='/deep-sleep' target='frame'>Deep sleep</a><br>";
+  html += "</div></div></div></main>";
+  html += "</body>";
+
+  server.send(200, "text/html", headers + html);
+}
+
+void handleDeepSleep() {
+  server.send(200, "text/html", "Going to deep-sleep. Reset to wake up");
+  delay(1);
+  ESP.deepSleep(20e6);
+}
+
+
+void handleDisplayClean() {
+  display.fillScreen(GxEPD_WHITE);
+  display.update();
+  server.send(200, "text/html", "Clearing display");
+}
+
+void handleDisplayWrite() {
+  display.fillScreen(GxEPD_WHITE);
+
+  // Analizo el POST iterando cada value
+  if (server.args() > 0) {
+    for (byte i = 0; i < server.args(); i++) {
+
+      if (server.argName(i) == "title") {
+        display.setFont(&FreeMonoBold24pt7b);
+        display.setCursor(10, 43);
+        display.print(server.arg(i));
+      }
+      if (server.argName(i) == "text") {
+        display.setFont(&FreeMonoBold12pt7b);
+        display.setCursor(10, 75);
+        display.print(server.arg(i));
+      }
+    }
+  }
+  display.update();
+  server.send(200, "text/html", "Text sent to display");
+}
+
+/** Callback for receiving IP address from AP */
+void gotIP(system_event_id_t event) {
+	#ifdef WIFI_BLE
+      SerialBT.disconnect();
+	  SerialBT.end();   
+	#endif
+
+  if (isConnected) return;
+
+  isConnected = true;
+	connStatusChanged = true;
+
+	if (!MDNS.begin(apName)) {
+		Serial.println("Error setting up MDNS responder!");
+    }
+	Serial.println((String(apName)+".local is online"));
+    MDNS.addService("http", "tcp", 80);
+  
+  // Render display with default start page
+  handleWebToDisplay();
+  // Start HTTP server
+  server.onNotFound(handle_http_not_found);
+  // Routes:
+  server.on("/", handle_http_root);
+  server.on("/display-write", handleDisplayWrite);
+  server.on("/web-image", handleWebToDisplay);
+  server.on("/display-clean", handleDisplayClean);
+  server.on("/deep-sleep", handleDeepSleep);
+  server.on("/delete-wifi-credentials", deleteWifiCredentials);
+  server.begin();
+}
+/**
+ * Start connection to AP
+ */
+void connectWiFi() {
+	// Setup callback function for successful connection
+	WiFi.onEvent(gotIP, SYSTEM_EVENT_STA_GOT_IP);
+	// Setup callback function for lost connection
+	WiFi.onEvent(lostCon, SYSTEM_EVENT_STA_DISCONNECTED);
+
+	Serial.println();
+	Serial.print("Start connection to ");
+  
+  Serial.println(ssidPrim);
+  WiFi.begin(ssidPrim.c_str(), pwPrim.c_str());
 }
 
 void loop() {
@@ -439,6 +521,122 @@ void loop() {
 #endif
 
 }
+#ifdef ESP32
+/**
+ * Create unique device name from MAC address
+ **/
+void createName() {
+	uint8_t baseMac[6];
+	// Get MAC address for WiFi station
+	esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
+	// Write unique name into apName
+	sprintf(apName, "udpx-%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+}
+
+/**
+ * initBTSerial
+ * Initialize Bluetooth Serial
+ * Start BLE server and service advertising
+ * @return <code>bool</code>
+ * 			true if success
+ * 			false if error occured
+ */
+bool initBTSerial() {
+		if (!SerialBT.begin(apName)) {
+			Serial.println("Failed to start BTSerial");
+			return false;
+		}
+		Serial.println("BTSerial active. Device name: " + String(apName));
+		return true;
+}
+
+/**
+ * readBTSerial
+ * read all data from BTSerial receive buffer
+ * parse data for valid WiFi credentials
+ */
+void readBTSerial() {
+	if (!SerialBT.available()) return;
+	uint64_t startTimeOut = millis();
+	String receivedData;
+	int msgSize = 0;
+	// Read RX buffer into String
+	
+	while (SerialBT.available() != 0) {
+		receivedData += (char)SerialBT.read();
+		msgSize++;
+		// Check for timeout condition
+		if ((millis()-startTimeOut) >= 5000) break;
+	}
+	SerialBT.flush();
+	Serial.println("Received message " + receivedData + " over Bluetooth");
+
+	// Decode the message only if it comes encoded (Like ESP32 WIFI Ble does)
+	if (receivedData[0] != '{') {
+		int keyIndex = 0;
+		for (int index = 0; index < receivedData.length(); index ++) {
+			receivedData[index] = (char) receivedData[index] ^ (char) apName[keyIndex];
+			keyIndex++;
+			if (keyIndex >= strlen(apName)) keyIndex = 0;
+		}
+		Serial.println("Decoded message: " + receivedData); 
+	}
+	
+	/** Json object for incoming data */
+	auto error = deserializeJson(jsonBuffer, receivedData);
+	if (!error)
+	{
+		if (jsonBuffer.containsKey("ssidPrim") &&
+			jsonBuffer.containsKey("pwPrim") &&
+			jsonBuffer.containsKey("ssidSec") &&
+			jsonBuffer.containsKey("pwSec"))
+		{
+			ssidPrim = jsonBuffer["ssidPrim"].as<String>();
+			pwPrim = jsonBuffer["pwPrim"].as<String>();
+
+			Preferences preferences;
+			preferences.begin("WiFiCred", false);
+			preferences.putString("ssidPrim", ssidPrim);
+			preferences.putString("pwPrim", pwPrim);
+			preferences.putBool("valid", true);
+			preferences.end();
+
+			Serial.println("Received over bluetooth:");
+			Serial.println("primary SSID: "+ssidPrim+" password: "+pwPrim);
+			connStatusChanged = true;
+			hasCredentials = true;
+			delay(100);
+			connectWiFi();
+			
+		}
+		else if (jsonBuffer.containsKey("erase"))
+		{ // {"erase":"true"}
+			Serial.println("Received erase command");
+			Preferences preferences;
+			preferences.begin("WiFiCred", false);
+			preferences.clear();
+			preferences.end();
+			connStatusChanged = true;
+			hasCredentials = false;
+			ssidPrim = "";
+			pwPrim = "";
+
+			int err;
+			err=nvs_flash_init();
+			Serial.println("nvs_flash_init: " + err);
+			err=nvs_flash_erase();
+			Serial.println("nvs_flash_erase: " + err);
+		}
+		 else if (jsonBuffer.containsKey("reset")) {
+			WiFi.disconnect();
+			esp_restart();
+		}
+	} else {
+		Serial.println("Received invalid JSON");
+	}
+	jsonBuffer.clear();
+}
+#endif
 
 void setup() {
   Serial.begin(115200);
@@ -448,37 +646,44 @@ void setup() {
   display.setFont(&FreeMonoBold12pt7b);
   display.setTextColor(GxEPD_BLACK);
 
-  uint8_t connectTries = 0;
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED && connectTries<30) {
-    Serial.print(" .");
-    delay(500);
-    connectTries++;
-  }
-Serial.println(WiFi.localIP());
+#ifdef WIFI_BLE
+	// Start Bluetooth serial
+	initBTSerial();
 
-  if (!MDNS.begin(domainName)) {
-    Serial.println("Error setting up MDNS responder!");
-    while (1) {
-      delay(1000);
-    }
+	preferences.begin("WiFiCred", false);
+    //preferences.clear(); // Uncomment to force delete preferences
+
+	bool hasPref = preferences.getBool("valid", false);
+	if (hasPref) {
+		ssidPrim = preferences.getString("ssidPrim","");
+		pwPrim = preferences.getString("pwPrim","");
+
+		if (ssidPrim.equals("") 
+				|| pwPrim.equals("")) {
+			Serial.println("Found preferences but credentials are invalid");
+		} else {
+			Serial.println("Read from preferences:");
+			Serial.println("primary SSID: "+ssidPrim+" password: "+pwPrim);
+			hasCredentials = true;
+		}
+	} else {
+		Serial.println("Could not find preferences, need send data over BLE");
+	}
+	preferences.end();
+
+	if (hasCredentials) {
+	    connectWiFi();
   }
-  Serial.printf("mDNS responder: %s.local\n",domainName);
-  // Add service to MDNS-SD
-  MDNS.addService("http", "tcp", 80);
+
+
+	#else
+	  WiFi.onEvent(gotIP, SYSTEM_EVENT_STA_GOT_IP);
+    WiFi.onEvent(lostCon, SYSTEM_EVENT_STA_DISCONNECTED);
+    Serial.printf("Connecting to Wi-Fi using WIFI_AP %s\n", WIFI_SSID);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  #endif
   
-  // Start HTTP server
-  server.onNotFound(handle_http_not_found);
-  // Routing
-  server.on("/", handle_http_root);
-  server.on("/display-write", handleDisplayWrite);
-  server.on("/web-image", handleWebToDisplay);
-  server.on("/display-clean", handleDisplayClean);
-  server.on("/deep-sleep", handleDeepSleep);
-  server.begin();
-  if (WiFi.status() == WL_CONNECTED) {
-    handleWebToDisplay();
-  } else {
+  if (WiFi.status() != WL_CONNECTED) {
     //displayMessage("Please check your credentials in Config.h\nCould not connect to "+String(WIFI_SSID),80);
     Serial.printf("Please check your credentials in Config.h\nCould not connect to %s\n", WIFI_SSID);
     delay(1000);
