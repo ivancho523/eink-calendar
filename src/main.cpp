@@ -10,6 +10,9 @@
 #include <GxIO/GxIO.cpp>
 #include <WiFiClient.h>
 
+#define COMPRESSION_BUFFER 1923
+#define DECOMPRESSION_BUFFER 15746
+
 #ifdef ESP32
   #include <ESPmDNS.h>
   #include <WebServer.h>
@@ -35,7 +38,7 @@
   #include "BluetoothSerial.h"
   // SerialBT class
   BluetoothSerial SerialBT;
-  StaticJsonDocument<400> jsonBuffer;
+  StaticJsonDocument<300> jsonBuffer;
 #endif
 
 // FONT used for title / message body
@@ -44,18 +47,11 @@
 #include <Fonts/FreeMonoBold24pt7b.h>
 
 bool debugMode = false;
-
 unsigned int secondsToDeepsleep = 0;
 
-const char* domainName = "calendar"; // mDNS
 String message;
 // Makes a div id="m" containing response message to dissapear after 3 seconds
 String javascriptFadeMessage = "<script>setTimeout(function(){document.getElementById('m').innerHTML='';},3000);</script>";
-
-
-
-#define COMPRESSION_BUFFER 3000
-#define DECOMPRESSION_BUFFER 16000
 
 // USE GPIO numbers for ESP32
 //CLK  = D8; D
@@ -371,7 +367,7 @@ void handle_http_root() {
   String headers = "<head><link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css\">";
   headers += "<meta name='viewport' content='width=device-width,initial-scale=1'></head>";
   String html = "<body><main role='main'><div class='container-fluid'><div class='row'>";
-  html += "<div class='col-md-12'><h4>" + String(domainName) + ".local</h4>";
+  html += "<div class='col-md-12'><h4>" + String(apName) + ".local</h4>";
   html += "<form id='f' action='/web-image' target='frame' method='POST'>";
   html += "<div class='row'><div class='col-sm-12'>";
 
@@ -530,7 +526,7 @@ void createName() {
 	// Get MAC address for WiFi station
 	esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
 	// Write unique name into apName
-	sprintf(apName, "udpx-%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+	sprintf(apName, "CALE-%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
 }
 
 /**
@@ -639,7 +635,8 @@ void readBTSerial() {
 #endif
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200);delay(10);
+  createName();
 
   display.init();
   display.setRotation(2); // Rotates display N times clockwise
@@ -666,7 +663,7 @@ void setup() {
 			Serial.println("primary SSID: "+ssidPrim+" password: "+pwPrim);
 			hasCredentials = true;
 		}
-	} else {
+	}  else {
 		Serial.println("Could not find preferences, need send data over BLE");
 	}
 	preferences.end();
@@ -682,11 +679,5 @@ void setup() {
     Serial.printf("Connecting to Wi-Fi using WIFI_AP %s\n", WIFI_SSID);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
   #endif
-  
-  if (WiFi.status() != WL_CONNECTED) {
-    //displayMessage("Please check your credentials in Config.h\nCould not connect to "+String(WIFI_SSID),80);
-    Serial.printf("Please check your credentials in Config.h\nCould not connect to %s\n", WIFI_SSID);
-    delay(1000);
-    ESP.restart();
-  }
+
 }
