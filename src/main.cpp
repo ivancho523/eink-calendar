@@ -83,10 +83,10 @@ String pwPrim;
 
 void deleteWifiCredentials() {
 	Serial.println("Clearing saved WiFi credentials");
+  server.send(200, "text/html", "Clearing saved WiFi credentials, after reset will need Bluetooth configuration");
 	preferences.begin("WiFiCred", false);
 	preferences.clear();
 	preferences.end();
-	delay(500);
 }
 
 uint32_t readBuffer16(uint8_t * outBuffer, long *bytePointer)
@@ -409,7 +409,9 @@ void handle_http_root() {
   html += "<label for='title'>Title:</label><input id='title' name='title' class='form-control'><br>";
   html += "<textarea placeholder='Content' name='text' rows=4 class='form-control'></textarea>";
   html += "<input type='submit' value='Send to display' class='btn btn-success'></form>";
-  html += "<a class='btn btn-default' role='button' target='frame' href='/display-clean'>Clean screen</a><br>";
+  html += "<a class='btn btn-default' role='button' target='frame' href='/display-clean'>Clean screen</a> | ";
+  html += "<a class='btn btn-danger' role='button' target='frame' href='/delete-wifi-credentials'>Reset WiFi credentials</a> | ";
+  html += "<a class='btn btn-default' role='button' target='frame' href='/deep-sleep'>Deep sleep mode</a><br>";
   html += "<iframe name='frame'></iframe>";
   html += "<a href='/deep-sleep' target='frame'>Deep sleep</a><br>";
   html += "</div></div></div></main>";
@@ -420,7 +422,7 @@ void handle_http_root() {
 
 void handleDeepSleep() {
   server.send(200, "text/html", "Going to deep-sleep. Reset to wake up");
-  delay(1);
+  delay(10);
   ESP.deepSleep(20e6);
 }
 
@@ -454,13 +456,21 @@ void handleDisplayWrite() {
   server.send(200, "text/html", "Text sent to display");
 }
 
+String ipAddress2String(const IPAddress& ipAddress){
+  return String(ipAddress[0]) + String(".") +\
+  String(ipAddress[1]) + String(".") +\
+  String(ipAddress[2]) + String(".") +\
+  String(ipAddress[3]);
+}
+
 /** Callback for receiving IP address from AP */
 void gotIP(system_event_id_t event) {
 	#ifdef WIFI_BLE
-      SerialBT.disconnect();
-	  SerialBT.end();   
+    SerialBT.disconnect();
+	  SerialBT.end();
+    Serial.printf("SerialBT.end() freeHeap: %d\n", ESP.getFreeHeap());
 	#endif
-
+  
   if (isConnected) return;
 
   isConnected = true;
@@ -469,9 +479,10 @@ void gotIP(system_event_id_t event) {
 	if (!MDNS.begin(apName)) {
 		Serial.println("Error setting up MDNS responder!");
     }
-	Serial.println((String(apName)+".local is online"));
-    MDNS.addService("http", "tcp", 80);
-  
+  MDNS.addService("http", "tcp", 80);
+
+	Serial.printf("%s.local is online with IP:", apName);
+  Serial.println(WiFi.localIP());  
   // Render display with default start page
   handleWebToDisplay();
   // Start HTTP server
@@ -485,6 +496,7 @@ void gotIP(system_event_id_t event) {
   server.on("/delete-wifi-credentials", deleteWifiCredentials);
   server.begin();
 }
+
 /**
  * Start connection to AP
  */
@@ -502,6 +514,7 @@ void connectWiFi() {
 }
 
 void loop() {
+
  server.handleClient();
 
   // Note: Enable deepsleep only as last step when all the rest is working as you expect
@@ -636,6 +649,7 @@ void readBTSerial() {
 
 void setup() {
   Serial.begin(115200);delay(10);
+  Serial.printf("setup() freeHeap: %d\n", ESP.getFreeHeap());
   createName();
 
   display.init();
@@ -644,9 +658,6 @@ void setup() {
   display.setTextColor(GxEPD_BLACK);
 
 #ifdef WIFI_BLE
-	// Start Bluetooth serial
-	initBTSerial();
-
 	preferences.begin("WiFiCred", false);
     //preferences.clear(); // Uncomment to force delete preferences
 
@@ -665,6 +676,9 @@ void setup() {
 		}
 	}  else {
 		Serial.println("Could not find preferences, need send data over BLE");
+    // Start Bluetooth serial. This reduces Heap memory like crazy so start it only if preferences are not set!
+    initBTSerial();
+    Serial.printf("initBTSerial() freeHeap: %d\n", ESP.getFreeHeap());
 	}
 	preferences.end();
 
