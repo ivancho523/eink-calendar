@@ -14,11 +14,6 @@
 #include <Fonts/FreeMonoBold24pt7b.h>
 
 //Converting fonts with ümlauts: ./fontconvert *.ttf 18 32 252
-// Point this to the Webpage rendering your calendar
-String calendarUrl = "http://calendar.fasani.de/carlos";
-// Point this to the screenshot endpoint (Should be placed on screenshot/index.php)
-String screenshotHost = "calendar.fasani.de";
-String screenshotPath = "/screenshot/";
 unsigned int secondsToDeepsleep = 120;
 // IMPORTANT: The url to the screenshot should respond with a BMP image
 // Take care with the route since should not return a redirect or any other response than what expected
@@ -37,9 +32,9 @@ ESP8266WebServer server(80);
 //DC   = D3;
 //RST  = D4;
 // GxIO_SPI(SPIClass& spi, int8_t cs, int8_t dc, int8_t rst = -1, int8_t bl = -1)
-GxIO_Class io(SPI, D8, D3, D4); 
+GxIO_Class io(SPI, EINK_CS, EINK_DC, EINK_RST);
 // GxGDEP015OC1(GxIO& io, uint8_t rst = D4, uint8_t busy = D2);
-GxEPD_Class display(io, D4, D6); 
+GxEPD_Class display(io, EINK_RST, EINK_BUSY);
 
 WiFiClient client; // wifi client object
 
@@ -204,7 +199,7 @@ void handleWebToDisplay() {
   String image = screenshotPath+"?u=" + url + "&z=" + zoom + "&b=" + brightness +"&eink=GxGDEW027C44";
   String request;
   request  = "GET " + image + " HTTP/1.1\r\n";
-  request += "Host: " + screenshotHost + "\r\n";
+  request += "Host: " + String(screenshotHost) + "\r\n";
   request += "Connection: close\r\n";
   request += "\r\n";
   Serial.println(screenshotHost+image);
@@ -363,7 +358,7 @@ void loop() {
     if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
         digitalWrite(D5, LOW);
         Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
-        ESP.deepSleep(120e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
+        ESP.deepSleep(3620e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
     }
     secondsToDeepsleep++;
     delay(1000);

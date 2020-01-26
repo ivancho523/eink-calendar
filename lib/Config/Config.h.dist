@@ -1,6 +1,19 @@
+#include <WString.h>
 #define WIFI_SSID "Your WiFi Name"
 #define WIFI_PASS ""
 
 #define DEEPSLEEP_ENABLED
 
 #define SLEEP_AFTER_SECONDS 240
+
+// ESP8266            |  ESP32 in comments
+int8_t EINK_CS = 15;   // GPIO 5   | old  D8
+int8_t EINK_DC = 0;    // 17       | old  D3
+int8_t EINK_RST = 2;   // 16       | old  D4  
+int8_t EINK_BUSY = 12; // 4        | old  D6 
+
+// Point this to the Webpage rendering your calendar
+String calendarUrl = "http://calendar.fasani.de/martin/logger.php?l=1Hr_esp8266"; ///logger.php
+// Point this to the screenshot endpoint (Should be placed on screenshot/index.php)
+const char* screenshotHost = "calendar.fasani.de";
+String screenshotPath = "/screenshot/compress.php"; // TODO: Compress version is not production
