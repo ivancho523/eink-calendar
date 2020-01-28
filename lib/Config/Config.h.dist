@@ -1,3 +1,4 @@
+#include <WString.h>
 #define WIFI_SSID "Your WiFi Name"
 #define WIFI_PASS ""
 

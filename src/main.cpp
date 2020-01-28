@@ -14,11 +14,6 @@
 #include <Fonts/FreeMonoBold24pt7b.h>
 
 //Converting fonts with ümlauts: ./fontconvert *.ttf 18 32 252
-// Point this to the Webpage rendering your calendar
-String calendarUrl = "http://calendar.fasani.de/carlos";
-// Point this to the screenshot endpoint (Should be placed on screenshot/index.php)
-String screenshotHost = "calendar.fasani.de";
-String screenshotPath = "/screenshot/";
 unsigned int secondsToDeepsleep = 120;
 // IMPORTANT: The url to the screenshot should respond with a BMP image
 // Take care with the route since should not return a redirect or any other response than what expected
@@ -206,7 +201,7 @@ void handleWebToDisplay() {
   String image = screenshotPath+"?u=" + url + "&z=" + zoom + "&b=" + brightness +"&eink=GxGDEW027C44";
   String request;
   request  = "GET " + image + " HTTP/1.1\r\n";
-  request += "Host: " + screenshotHost + "\r\n";
+  request += "Host: " + String(screenshotHost) + "\r\n";
   request += "Connection: close\r\n";
   request += "\r\n";
   Serial.println(screenshotHost+image);
@@ -365,7 +360,7 @@ void loop() {
     if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
         digitalWrite(EINK_VCC, LOW);
         Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
-        ESP.deepSleep(120e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
+        ESP.deepSleep(3620e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
     }
     secondsToDeepsleep++;
     delay(1000);
