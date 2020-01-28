@@ -37,14 +37,16 @@ ESP8266WebServer server(80);
 //DC   = D3;
 //RST  = D4;
 // GxIO_SPI(SPIClass& spi, int8_t cs, int8_t dc, int8_t rst = -1, int8_t bl = -1)
-GxIO_Class io(SPI, D8, D3, D4); 
-// GxGDEP015OC1(GxIO& io, uint8_t rst = D4, uint8_t busy = D2);
-GxEPD_Class display(io, D4, D6); 
+// SPI interface GPIOs defined in Config.h  
+GxIO_Class io(SPI, EINK_CS, EINK_DC, EINK_RST);
+// (GxIO& io, uint8_t rst = D4, uint8_t busy = D2);
+GxEPD_Class display(io, EINK_RST, EINK_BUSY );
 
 WiFiClient client; // wifi client object
 
 // Displays message doing a partial update
 void displayMessage(String message, int height) {
+  digitalWrite(EINK_VCC, HIGH);
   Serial.println("DISPLAY prints: "+message);
   display.setTextColor(GxEPD_WHITE);
   display.fillRect(0,0,display.width(),height,GxEPD_BLACK);
@@ -122,7 +124,7 @@ void handleDeepSleep() {
 
 
 void handleDisplayClean() {
-  digitalWrite(D5, HIGH);
+  digitalWrite(EINK_VCC, HIGH);
   Serial.println("handleDisplayClean");
   display.fillScreen(GxEPD_WHITE);
   display.update();
@@ -130,7 +132,7 @@ void handleDisplayClean() {
 }
 
 void handleDisplayWrite() {
-  digitalWrite(D5, HIGH);
+  digitalWrite(EINK_VCC, HIGH);
   Serial.println("handleDisplayWrite");
   display.fillScreen(GxEPD_WHITE);
 
@@ -177,7 +179,7 @@ uint32_t read32()
 
 
 void handleWebToDisplay() {
-  digitalWrite(D5, HIGH);
+  digitalWrite(EINK_VCC, HIGH);
   int millisIni = millis();
   String url = calendarUrl;
   String zoom = ".8";
@@ -361,7 +363,7 @@ void loop() {
   // Note: Enable deepsleep only as last step when all the rest is working as you expect
   #ifdef DEEPSLEEP_ENABLED
     if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
-        digitalWrite(D5, LOW);
+        digitalWrite(EINK_VCC, LOW);
         Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
         ESP.deepSleep(120e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
     }
@@ -374,8 +376,8 @@ void loop() {
 void setup() {
   Serial.begin(115200);
   delay(100);
-  pinMode(D5, OUTPUT);
-
+  pinMode(EINK_VCC, OUTPUT);
+  
   display.init();
   display.setRotation(3); // Rotates display N times clockwise
   display.setFont(&FreeMonoBold12pt7b);

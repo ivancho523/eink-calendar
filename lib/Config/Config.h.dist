@@ -4,3 +4,11 @@
 #define DEEPSLEEP_ENABLED
 
 #define SLEEP_AFTER_SECONDS 240
+
+
+// ESP8266
+int EINK_CS   = 15; // D8
+int EINK_DC   = 0;  // D3
+int EINK_RST  = 2;  // D4
+int EINK_BUSY = 12; // D6
+int EINK_VCC  = 4;  // D2
