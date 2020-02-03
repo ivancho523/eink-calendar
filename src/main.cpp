@@ -14,7 +14,7 @@
 #include <Fonts/FreeMonoBold24pt7b.h>
 
 //Converting fonts with ümlauts: ./fontconvert *.ttf 18 32 252
-unsigned int secondsToDeepsleep = 120;
+unsigned int secondsToDeepsleep = 0;
 // IMPORTANT: The url to the screenshot should respond with a BMP image
 // Take care with the route since should not return a redirect or any other response than what expected
 bool debugMode = false;
@@ -357,11 +357,13 @@ void loop() {
   
   // Note: Enable deepsleep only as last step when all the rest is working as you expect
   #ifdef DEEPSLEEP_ENABLED
+   Serial.printf("%d", secondsToDeepsleep);
     if (secondsToDeepsleep>SLEEP_AFTER_SECONDS) {
         digitalWrite(EINK_VCC, LOW);
-        Serial.println("Going to sleep one hour. Waking up only if D0 is connected to RST");
-        ESP.deepSleep(3620e6);  // 3600 = 1 hour in seconds . En 120 seg para prueba
+        Serial.println("Going to sleep. Waking up only if D0 is connected to RST");
+        ESP.deepSleep(3620e6);  // 3600 = 1 hour in seconds  ESP.deepSleepMax()
     }
+    
     secondsToDeepsleep++;
     delay(1000);
   #endif
