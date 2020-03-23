@@ -1,7 +1,9 @@
 #include <Config.h>
+#include <TinyPICO.h>
 #ifdef ESP32
   #include <WiFi.h>
   #include <ESPmDNS.h>
+  TinyPICO tp = TinyPICO();
 #elif ESP8266
   #include <ESP8266WiFi.h>
   #include <ESP8266mDNS.h>
@@ -342,6 +344,7 @@ void loop() {
       display.powerDown();
       delay(10);
       #ifdef ESP32
+        tp.DotStar_SetPower(false);
         Serial.printf("Going to sleep %llu seconds\n", DEEPSLEEP_SECONDS);
         esp_sleep_enable_timer_wakeup(DEEPSLEEP_SECONDS * USEC);
         esp_deep_sleep_start();
@@ -370,7 +373,8 @@ void setup() {
     delay(500);
     connectTries++;
   }
-
+  Serial.print("Battery Power: ");
+  Serial.println(tp.GetBatteryVoltage());
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("ONLINE");
@@ -384,6 +388,7 @@ void setup() {
     display.powerDown();
 
       #ifdef ESP32
+        tp.DotStar_SetPower(false);
         Serial.printf("Going to sleep %d seconds\n", secs);
         esp_sleep_enable_timer_wakeup(secs * USEC);
         esp_deep_sleep_start();
