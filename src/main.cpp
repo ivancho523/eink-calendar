@@ -19,7 +19,9 @@
   #elif defined(GDEW075T8)
   #include <GxGDEW075T8/GxGDEW075T8.h>
   #elif defined(GDEW075T7)
-  #include <GxGDEW075T7/GxGDEW075T7.h> 
+  #include <GxGDEW075T7/GxGDEW075T7.h>
+  #elif defined(GDEP015OC1)
+  #include <GxGDEP015OC1/GxGDEP015OC1.h>
   #elif defined(GDEW0213I5F)
   #include <GxGDEW0213I5F/GxGDEW0213I5F.h>
   #elif defined(GDE0213B1)
